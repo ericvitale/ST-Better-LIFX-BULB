@@ -84,7 +84,7 @@ metadata {
 			state "colorTemp", label: '${currentValue}K'
 		}
         
-		controlTile("colorTempSliderControl", "device.colorTemperature", "slider", height: 1, width: 4, inactiveLabel: false, range:"(2700..9000)") {
+		controlTile("colorTempSliderControl", "device.colorTemperature", "slider", height: 1, width: 4, inactiveLabel: false, range:"(2500..9000)") {
 			state "colorTemp", action:"color temperature.setColorTemperature"
 		}
         
