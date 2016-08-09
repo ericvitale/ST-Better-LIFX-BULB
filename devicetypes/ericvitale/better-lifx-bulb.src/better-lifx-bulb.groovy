@@ -3,6 +3,8 @@
  *
  *  Copyright 2016 Eric Vitale
  *
+ * Version 1.0.0 - Initial Release (08/08/2016)
+ *
  *  Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
  *  in compliance with the License. You may obtain a copy of the License at:
  *
@@ -36,9 +38,9 @@ metadata {
         }
        
        	section("Settings") {
-	        input "logging", "enum", title: "Log Level", required: false, defaultValue: "DEBUG", options: ["TRACE", "DEBUG", "INFO", "WARN", "ERROR"]
+	        input "logging", "enum", title: "Log Level", required: false, defaultValue: "INFO", options: ["TRACE", "DEBUG", "INFO", "WARN", "ERROR"]
             input "turnOnWithAdjustments", "bool", title: "Turn on lights when making adjustments?", required: true, defaultValue: true
-    	    input "useSchedule", "bool", title: "Use Schedule", required: false, defaultValue: false
+    	    input "useSchedule", "bool", title: "Use Schedule", required: false, defaultValue: true
     	    input "frequency", "number", title: "Frequency?", required: false, range: "1..*", defaultValue: 15
        	 	input "startHour", "number", title: "Schedule Start Hour", required: false, range: "0..23", defaultValue: 7
        		input "endHour", "number", title: "Schedule End Hour", required: false, range: "0..23", defaultValue: 23
@@ -66,6 +68,10 @@ metadata {
 				attributeState "on", label:'${name}', action:"switch.off", icon:"http://hosted.lifx.co/smartthings/v1/196xOn.png", backgroundColor:"#79b821"
 				attributeState "off", label:'${name}', action:"switch.on", icon:"http://hosted.lifx.co/smartthings/v1/196xOff.png", backgroundColor:"#ffffff"
 			}
+            
+            tileAttribute ("device.lastActivity", key: "SECONDARY_CONTROL") {
+				attributeState "default", label:'Last activity: ${currentValue}', action: "refresh.refresh"
+			}
         }
         
         valueTile("Brightness", "device.level", width: 2, height: 1) {
@@ -75,10 +81,6 @@ metadata {
         controlTile("levelSliderControl", "device.level", "slider", width: 4, height: 1) {
         	state "level", action:"switch level.setLevel"
         }
-
-        /*standardTile("refresh", "device.switch", inactiveLabel: false, decoration: "flat") {
-			state "default", label:"", action:"refresh.refresh", icon:"st.secondary.refresh"
-		}*/
         
         valueTile("colorTemp", "device.colorTemperature", inactiveLabel: false, decoration: "flat", height: 1, width: 2) {
 			state "colorTemp", label: '${currentValue}K'
@@ -95,21 +97,8 @@ metadata {
         standardTile("refresh", "device.switch", inactiveLabel: false, decoration: "flat", height: 3, width: 3) {
 			state "default", label:"", action:"refresh.refresh", icon: "st.secondary.refresh"
 		}
-        
-        //standardTile("sceneOne", "device.sceneOne", inactiveLabel: false, decoration: "flat", height: 2, width: 2) {
-		//	state "default", label:"Scene One", action:"sceneOne", icon:"http://hosted.lifx.co/smartthings/v1/196xOn.png"
-		//}
-       
-        //standardTile("sceneTwo", "device.sceneTwo", inactiveLabel: false, decoration: "flat", height: 2, width: 2) {
-		//	state "default", label:"Scene Two", action:"sceneTwo", icon:"http://hosted.lifx.co/smartthings/v1/196xOn.png"
-		//}
-        
-        //standardTile("sceneThree", "device.sceneThree", inactiveLabel: false, decoration: "flat", height: 2, width: 2) {
-		//	state "default", label:"Scene Three", action:"sceneThree", icon:"http://hosted.lifx.co/smartthings/v1/196xOn.png"
-		//}
 
         main(["switch"])
-        //details(["switch", "Brightness", "levelSliderControl", "colorTemp", "colorTempSliderControl", "rgbSelector", "poll", "sceneOne", "sceneTwo", "sceneThree", "refresh"])
         details(["switchDetails", "Brightness", "levelSliderControl", "colorTemp", "colorTempSliderControl", "rgbSelector", "refresh"])
     }
 }
@@ -177,7 +166,10 @@ def updated() {
 
 def initialize() {
 	log("Begin initialize.", "DEBUG")
+    runIn(2, refresh)
+    log("Scheduling initial refresh...", "INFO")
     setupSchedule()
+    log("Setup refresh schedule...", "INFO")
 	log("End initialize.", "DEBUG")
 }
 
@@ -199,7 +191,7 @@ def setSaturation() {
 
 def setColor(setColor) {
 	log("Begin setColor(${setColor}).", "DEBUG")
-    log("Color HEX: ${setColor.hex}.", "DEBUG")
+    log("Color HEX: ${setColor.hex}.", "INFO")
 
     def hue = setColor.hue * 3.6
     def saturation = setColor.saturation / 100
@@ -218,6 +210,7 @@ def setColor(setColor) {
 
 def setColorTemperature(colorTemperature) {
 	log("Begin on().", "DEBUG")
+    log("Color temperature selected = ${colorTemperature}K.", "INFO")
     if(turnOnWithAdjustments) {
     	commandLIFX(bulb, "PUT", [color: "kelvin:${colorTemperature}", power: "on"])
     	sendEvent(name: "colorTemperature", value: colorTemperature)
@@ -238,20 +231,23 @@ def poll() {
 
 def refresh() {
 	log("Begin refresh().", "DEBUG")
+    log("Beginning device update...", "INFO")
 	handleResponse(commandLIFX(bulb, "GET", ""))
-    //commandLIFX(bulb, "GET", "")
     log("End refresh().", "DEBUG")
 }
 
 def on() {
 	log("Begin on().", "DEBUG")
+    log("Turning bulb on.", "INFO")
     commandLIFX(bulb, "PUT", "power=on")
     sendEvent(name: "switch", value: "on")
+    refresh()
 	log("End on().", "DEBUG")
 }
 
 def off() {
 	log("Begin off().", "DEBUG")
+    log("Turning bulb off.", "INFO")
     commandLIFX(bulb, "PUT", "power=off")
     sendEvent(name: "switch", value: "off")
 	log("End off().", "DEBUG")
@@ -259,7 +255,7 @@ def off() {
 
 def setLevel(brightness) {
 	log("Begin setLevel(...)", "DEBUG")
-    log("Brightness level selected = ${brightness}.", "DEBUG")
+    log("Brightness level selected = ${brightness}.", "INFO")
     def brightnessPercent = brightness / 100
     
     if(turnOnWithAdjustments) {
@@ -387,8 +383,8 @@ def handleResponse(resp) {
         		sendEvent(name: "switch", value: "on")
             } else {
             	log("Saturation is > 0.0, setting color.", "DEBUG")
-                //def hex = hslToHex(it.color.hue, it.color.saturation, it.brightness)
-                //log("hex = ${hex}.", "DEBUG")
+                def hex = hslToHex(it.color.hue, it.color.saturation, it.brightness)
+                log("hex = ${hex}.", "DEBUG")
               	//sendEvent(name: "color", value: hex)
                 sendEvent(name: "level", value: (it.brightness * 100).toInteger())
 		        sendEvent(name: "switch", value: "on")
@@ -397,6 +393,9 @@ def handleResponse(resp) {
 	        sendEvent(name: "switch", value: "off")
         }
     }
+    
+    log("Device update received from LIFX...", "INFO")
+    updateDeviceLastActivity(new Date())
 }
 
 ////////////// END LIFX COMMANDS /////////////
@@ -428,6 +427,11 @@ def setupSchedule() {
     log("End setupSchedule().", "DEBUG")
 }
 
+def updateDeviceLastActivity(lastActivity) {
+	def finalString = lastActivity?.format('MM/d/yyyy hh:mm a',location.timeZone)    
+	sendEvent(name: "lastActivity", value: finalString, display: false , displayed: false)
+}
+
 private hslToHex(hue, sat, lum) {
 	log("hue = ${hue}.", "DEBUG")
 	def tR = (hue / 360) + 0.333
@@ -442,7 +446,7 @@ private hslToHex(hue, sat, lum) {
     if(lum < 0.5) {
     	t1 = lum * (1.0 + sat)
     } else {
-    	t1 = lum + sat - lum * sat
+    	t1 = lum + sat - (lum * sat)
     }
     
     //Calculate R
