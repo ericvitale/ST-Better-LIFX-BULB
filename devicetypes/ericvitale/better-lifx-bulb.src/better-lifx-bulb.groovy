@@ -3,6 +3,7 @@
  *
  *  Copyright 2016 Eric Vitale
  *
+ * Version 1.0.1 - Added additonal logging on refresh method (12/17/2016)
  * Version 1.0.0 - Initial Release (08/08/2016)
  *
  *  Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
@@ -15,8 +16,10 @@
  *  for the specific language governing permissions and limitations under the License.
  *
  */
+import java.text.DecimalFormat;
+ 
 metadata {
-	definition (name: "Better LIFX Bulb", namespace: "ericvitale", author: "Eric Vitale") {
+	definition (name: "Better LIFX Bulb", namespace: "ericvitale", author: "ericvitale@gmail.com") {
 		capability "Actuator"
 		capability "Color Control"
 		capability "Color Temperature"
@@ -26,6 +29,9 @@ metadata {
 		capability "Sensor"
 		capability "Switch"
 		capability "Switch Level"
+        
+        attribute "lastRefresh", "string"
+        attribute "refreshText", "string"
 	}
     
     preferences {
@@ -40,10 +46,12 @@ metadata {
        	section("Settings") {
 	        input "logging", "enum", title: "Log Level", required: false, defaultValue: "INFO", options: ["TRACE", "DEBUG", "INFO", "WARN", "ERROR"]
             input "turnOnWithAdjustments", "bool", title: "Turn on lights when making adjustments?", required: true, defaultValue: true
-    	    input "useSchedule", "bool", title: "Use Schedule", required: false, defaultValue: true
-    	    input "frequency", "number", title: "Frequency?", required: false, range: "1..*", defaultValue: 15
-       	 	input "startHour", "number", title: "Schedule Start Hour", required: false, range: "0..23", defaultValue: 7
-       		input "endHour", "number", title: "Schedule End Hour", required: false, range: "0..23", defaultValue: 23
+    	    input "useSchedule", "bool", title: "Use Schedule", required: false, defaultValue: true, submitOnChange: true
+    	    //if(useSchedule == true) {
+            	input "frequency", "number", title: "Frequency?", required: false, range: "1..*", defaultValue: 15
+       	 		input "startHour", "number", title: "Schedule Start Hour", required: false, range: "0..23", defaultValue: 7
+       			input "endHour", "number", title: "Schedule End Hour", required: false, range: "0..23", defaultValue: 23
+            //}
         }
     }
 
@@ -367,11 +375,27 @@ def handleResponse(resp) {
     */    
     resp.data.each {
     
-    	log("${it.label} is ${it.power}.", "DEBUG")
+    	log("${it.label} is ${it.power}.", "TRACE")
         log("Bulb Type: ${it.product.name}.", "TRACE")
         log("Capabilities? Color Temperature = ${it.product.capabilities.has_variable_color_temp}, Is Color = ${it.product.capabilities.has_color}.", "TRACE")
         log("Brightness = ${it.brightness}.", "TRACE")
         log("Color = [saturation:${it.color.saturation}], kelvin:${it.color.kelvin}, hue:${it.color.hue}.", "TRACE")
+        
+        def refreshT = "${it.label} is ${it.power}" // with a brightness of ${it.brightness}.
+        
+        DecimalFormat df = new DecimalFormat("###,##0.0#")
+        DecimalFormat dfl = new DecimalFormat("###,##0.000")
+        
+        if(it.power == "on") {
+        	refreshT += " with a brightness of ${df.format(it.brightness * 100)}%. Color @ [saturation:${df.format(it.color.saturation)}], kelvin:${it.color.kelvin}, hue:${dfl.format(it.color.hue)}."
+        } else {
+        	refreshT += "."
+        }
+        
+        log("${refreshT}", "INFO")
+        
+        sendEvent(name: "lastRefresh", value: new Date())
+        sendEvent(name: "refreshText", value: refreshT)
         
     	if(it.power == "on") {
         	sendEvent(name: "switch", value: "on")
