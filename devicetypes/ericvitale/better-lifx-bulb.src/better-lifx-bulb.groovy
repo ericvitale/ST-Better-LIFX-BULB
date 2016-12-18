@@ -3,6 +3,7 @@
  *
  *  Copyright 2016 Eric Vitale
  *
+ * Version 1.0.2 - More accuracy for setLevel (12/17/2016)
  * Version 1.0.1 - Added additonal logging on refresh method (12/17/2016)
  * Version 1.0.0 - Initial Release (08/08/2016)
  *
@@ -199,7 +200,7 @@ def setSaturation() {
 
 def setColor(setColor) {
 	log("Begin setColor(${setColor}).", "DEBUG")
-    log("Color HEX: ${setColor.hex}.", "INFO")
+    log("Color HEX: ${setColor.hex}.", "DEBUG")
 
     def hue = setColor.hue * 3.6
     def saturation = setColor.saturation / 100
@@ -348,7 +349,7 @@ def handleResponse(resp) {
 	}
     
     /*
-    Response: [[product:[company:LIFX, name:Color 1000, capabilities:[has_variable_color_temp:true, has_color:true], identifier:lifx_color_a19], brightness:1.0, id:d073d512e65d, location:[id:0f111fc37110c0462c0dc86f62acedf0, name:Turkey Foot], color:[saturation:0.0, kelvin:4362, hue:246.38864728770886], connected:true, power:off, label:Office Light, uuid:029c74a5-263d-47cd-9b35-182b9610eb40, last_seen:2016-07-31T20:20:51.168+01:00, group:[id:924792021a11aebc749879571138f74f, name:Office], seconds_since_seen:0.00232187]]
+   
     [[product:
     	[company:LIFX, 
          name:Color 1000, 
@@ -359,17 +360,17 @@ def handleResponse(resp) {
          brightness:1.0, 
          id:d073d512e65d, 
          location:
-         	[id:0f111fc37110c0462c0dc86f62acedf0, 
+         	[id:x, 
          	name:Turkey Foot],
          color:
          	[saturation:0.0, kelvin:4362, hue:246.38864728770886], 
          connected:true, 
          power:off, 
          label:Office Light, 
-         uuid:029c74a5-263d-47cd-9b35-182b9610eb40, 
+         uuid:xxx-263d-47cd-9b35-182b9610eb40, 
          last_seen:2016-07-31T20:20:51.168+01:00, 
          group:
-         	[id:924792021a11aebc749879571138f74f, name:Office], 
+         	[id:xx, name:Office], 
          seconds_since_seen:0.00232187]]
     
     */    
@@ -381,10 +382,11 @@ def handleResponse(resp) {
         log("Brightness = ${it.brightness}.", "TRACE")
         log("Color = [saturation:${it.color.saturation}], kelvin:${it.color.kelvin}, hue:${it.color.hue}.", "TRACE")
         
-        def refreshT = "${it.label} is ${it.power}" // with a brightness of ${it.brightness}.
+        def refreshT = "${it.label} is ${it.power}"
         
         DecimalFormat df = new DecimalFormat("###,##0.0#")
         DecimalFormat dfl = new DecimalFormat("###,##0.000")
+        DecimalFormat df0 = new DecimalFormat("###,##0")
         
         if(it.power == "on") {
         	refreshT += " with a brightness of ${df.format(it.brightness * 100)}%. Color @ [saturation:${df.format(it.color.saturation)}], kelvin:${it.color.kelvin}, hue:${dfl.format(it.color.hue)}."
@@ -401,16 +403,25 @@ def handleResponse(resp) {
         	sendEvent(name: "switch", value: "on")
 			if(it.color.saturation == 0.0) {
             	log("Saturation is 0.0, setting color temperature.", "DEBUG")
+                
+                def b = df0.format(it.brightness * 100)
+                
                 sendEvent(name: "colorTemperature", value: it.color.kelvin)
        			sendEvent(name: "color", value: "#ffffff")
-                sendEvent(name: "level", value: (it.brightness * 100).toInteger())
+                sendEvent(name: "level", value: b)
         		sendEvent(name: "switch", value: "on")
             } else {
             	log("Saturation is > 0.0, setting color.", "DEBUG")
-                def hex = hslToHex(it.color.hue, it.color.saturation, it.brightness)
-                log("hex = ${hex}.", "DEBUG")
-              	//sendEvent(name: "color", value: hex)
-                sendEvent(name: "level", value: (it.brightness * 100).toInteger())
+                def h = df.format(it.color.hue)
+                def s = df.format(it.color.saturation)
+                def b = df0.format(it.brightness * 100)
+                
+                log("h = ${h}, s = ${s}.", "INFO")
+                
+                sendEvent(name: "hue", value: h, displayed: true)
+                sendEvent(name: "saturation", value: s, displayed: true)
+                sendEvent(name: "kelvin", value: it.color.kelvin, displayed: true)
+                sendEvent(name: "level", value: b)
 		        sendEvent(name: "switch", value: "on")
             }
         } else if(it.power == "off") {
@@ -454,48 +465,4 @@ def setupSchedule() {
 def updateDeviceLastActivity(lastActivity) {
 	def finalString = lastActivity?.format('MM/d/yyyy hh:mm a',location.timeZone)    
 	sendEvent(name: "lastActivity", value: finalString, display: false , displayed: false)
-}
-
-private hslToHex(hue, sat, lum) {
-	log("hue = ${hue}.", "DEBUG")
-	def tR = (hue / 360) + 0.333
-    def tG = (hue / 360)
-    def tB = (hue / 360) - 0.333
-    def red
-    def green
-    def blue
-    def t1// = lum * (1.0 + 0.67)
-    def t2 = 2 * lum - 0.4676
-    
-    if(lum < 0.5) {
-    	t1 = lum * (1.0 + sat)
-    } else {
-    	t1 = lum + sat - (lum * sat)
-    }
-    
-    //Calculate R
-    red = (doCrazyMath(tR, t1, t2) * 255).toInteger()
-    green = (doCrazyMath(tG, t1, t2) * 255).toInteger()
-    blue = (doCrazyMath(tB, t1, t2) * 255).toInteger()
-    
-    log("red = ${red}.", "DEBUG")
-    log("green = ${green}.", "DEBUG")
-    log("blue = ${blue}.", "DEBUG")
-    
-    def hex = "#" + Integer.toHexString(red) + Integer.toHexString(green) + Integer.toHexString(blue)
-    log("hex = ${hex}.", "DEBUG")
-    return hex
-    //return "#ff0000"
-}
-
-def doCrazyMath(temp, t1, t2) {
-	if((6 * temp) < 1) {
-    	return t2 + (t1 - t2) * 6 * temp
-    } else if((2 * temp) < 1) {
-    	return t1
-    } else if((3 * temp) < 2) {
-    	return t2 + (t1 - t2) * (0.666 - temp) * 6
-    } else {
-    	return t2
-    }
 }
