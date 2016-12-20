@@ -34,6 +34,9 @@ metadata {
         attribute "lastRefresh", "string"
         attribute "refreshText", "string"
         attribute "irState", "string"
+        
+        command "irOn", ["number"]
+        command "irOff"
 	}
     
     preferences {
