@@ -256,7 +256,7 @@ def on() {
     log("Turning bulb on.", "INFO")
     commandLIFX(bulb, "PUT", "power=on")
     //commandLIFX(bulb, "PUT", ["power": "on", "infrared": 0.8])
-    runIn(10, irOn)
+    runIn(10, irOff)
     sendEvent(name: "switch", value: "on")
     refresh()
 	log("End on().", "DEBUG")
@@ -267,7 +267,7 @@ def off() {
     log("Turning bulb off, IR = off.", "INFO")
     commandLIFX(bulb, "PUT", "power=off")
     //commandLIFX(bulb, "PUT", ["power": "off", "infrared": 0])
-    runIn(10, irOff)
+    runIn(10, irOn)
     sendEvent(name: "switch", value: "off")
 	log("End off().", "DEBUG")
 }
