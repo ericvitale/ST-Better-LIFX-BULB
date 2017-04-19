@@ -3,6 +3,7 @@
  *
  *  Copyright 2016 Eric Vitale
  *
+ * Version 1.0.3 - Updated the scheduling settings (04/18/2017)
  * Version 1.0.2 - More accuracy for setLevel (12/17/2016)
  * Version 1.0.1 - Added additonal logging on refresh method (12/17/2016)
  * Version 1.0.0 - Initial Release (08/08/2016)
@@ -47,12 +48,10 @@ metadata {
        	section("Settings") {
 	        input "logging", "enum", title: "Log Level", required: false, defaultValue: "INFO", options: ["TRACE", "DEBUG", "INFO", "WARN", "ERROR"]
             input "turnOnWithAdjustments", "bool", title: "Turn on lights when making adjustments?", required: true, defaultValue: true
-    	    input "useSchedule", "bool", title: "Use Schedule", required: false, defaultValue: true, submitOnChange: true
-    	    //if(useSchedule == true) {
-            	input "frequency", "number", title: "Frequency?", required: false, range: "1..*", defaultValue: 15
-       	 		input "startHour", "number", title: "Schedule Start Hour", required: false, range: "0..23", defaultValue: 7
-       			input "endHour", "number", title: "Schedule End Hour", required: false, range: "0..23", defaultValue: 23
-            //}
+            input "bRefreshOnSchedule", "bool", title: "Use Schedule", required: false, defaultValue: true
+          	input "frequency", "number", title: "Frequency?", required: false, range: "1..*", defaultValue: 15
+   	 		input "startHour", "number", title: "Schedule Start Hour", required: false, range: "0..23", defaultValue: 7
+   			input "endHour", "number", title: "Schedule End Hour", required: false, range: "0..23", defaultValue: 23
         }
     }
 
@@ -175,11 +174,20 @@ def updated() {
 
 def initialize() {
 	log("Begin initialize.", "DEBUG")
-    runIn(2, refresh)
+    
     log("Scheduling initial refresh...", "INFO")
-    setupSchedule()
-    log("Setup refresh schedule...", "INFO")
-	log("End initialize.", "DEBUG")
+    runIn(2, refresh)
+    
+    log("bRefreshOnSchedule = ${bRefreshOnSchedule}.", "DEBUG")
+    
+    setScheduleRefreshEnabled(bRefreshOnSchedule)
+    
+    if(isScheduledRefreshEnabled()) {
+		log("Scheduling auto refresh.", "INFO")
+		setupSchedule()
+	}
+    
+    log("End initialize.", "DEBUG")
 }
 
 def configure() {
@@ -445,10 +453,8 @@ def setupSchedule() {
         log("Exception ${e}", "ERROR")
         return
     }
-
-	log("useSchedule = ${useSchedule}.", "DEBUG")
     
-    if(useSchedule) {
+    if(isScheduledRefreshEnabled()) {
         
         try {
         	schedule("17 0/${frequency.toString()} ${startHour.toString()}-${endHour.toString()} * * ?", refresh)
@@ -465,4 +471,15 @@ def setupSchedule() {
 def updateDeviceLastActivity(lastActivity) {
 	def finalString = lastActivity?.format('MM/d/yyyy hh:mm a',location.timeZone)    
 	sendEvent(name: "lastActivity", value: finalString, display: false , displayed: false)
+}
+
+private isScheduledRefreshEnabled() {
+	if(state.scheduledRefresh == null) {
+    	state.scheduledRefresh = false
+    }
+    return state.scheduledRefresh
+}
+
+private setScheduleRefreshEnabled(value) {
+	state.scheduledRefresh = value
 }
