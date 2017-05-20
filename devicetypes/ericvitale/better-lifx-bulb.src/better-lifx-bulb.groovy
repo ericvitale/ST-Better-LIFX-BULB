@@ -3,6 +3,7 @@
  *
  *  Copyright 2016 Eric Vitale
  *
+ * Verison 1.0.4 - Fixed an issue with setColor() introduced by an api change. (05/19/2017)
  * Version 1.0.3 - Updated the scheduling settings (04/18/2017)
  * Version 1.0.2 - More accuracy for setLevel (12/17/2016)
  * Version 1.0.1 - Added additonal logging on refresh method (12/17/2016)
@@ -214,11 +215,11 @@ def setColor(setColor) {
     def saturation = setColor.saturation / 100
     
     if(turnOnWithAdjustments) {
-    	commandLIFX(bulb, "PUT", [color: "saturation:${saturation}+hue:${hue}", power: "on"])
+    	commandLIFX(bulb, "PUT", [color: "saturation:${saturation} hue:${hue}", power: "on"])
     	sendEvent(name: "color", value: setColor.hex)
         sendEvent(name: "switch", value: "on")
     } else {
-        commandLIFX(bulb, "PUT", [color: "saturation:${saturation}+hue:${hue}"])
+        commandLIFX(bulb, "PUT", [color: "saturation:${saturation} hue:${hue}"])
     	sendEvent(name: "color", value: setColor.hex)
     }
     
