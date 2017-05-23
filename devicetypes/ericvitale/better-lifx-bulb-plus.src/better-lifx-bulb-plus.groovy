@@ -3,6 +3,7 @@
  *
  *  Copyright 2016 Eric Vitale
  *
+ * Version 1.0.4 - Added saturation:0 to setColorTemperature per LIFX's recommendation. (05/22/2017)
  * Version 1.0.3 - Fixed an issue with setColor() introduced by an api change. (05/19/2017)
  * Version 1.0.2 - More accuracy for setLevel (12/17/2016)
  * Version 1.0.1 - Added additonal logging on refresh method (12/17/2016)
@@ -228,7 +229,7 @@ def setColorTemperature(colorTemperature) {
 	log("Begin on().", "DEBUG")
     log("Color temperature selected = ${colorTemperature}K.", "INFO")
     if(turnOnWithAdjustments) {
-    	commandLIFX(bulb, "PUT", [color: "kelvin:${colorTemperature}", power: "on"])
+    	commandLIFX(bulb, "PUT", [color: "kelvin:${colorTemperature saturation:0}", power: "on"])
     	sendEvent(name: "colorTemperature", value: colorTemperature)
         sendEvent(name: "color", value: "#ffffff")
         sendEvent(name: "switch", value: "on")
