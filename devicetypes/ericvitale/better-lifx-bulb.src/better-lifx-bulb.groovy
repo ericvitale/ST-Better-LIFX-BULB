@@ -1,8 +1,9 @@
 /**
- *  Better LIFX Bulb
+ * Better LIFX Bulb
  *
- *  Copyright 2016 Eric Vitale
+ * Copyright 2016 Eric Vitale
  *
+ * Version 1.0.6 - Added the transitionLevel(), apiFlash(), & runEffect() methods. (06/16/2017)
  * Version 1.0.5 - Added saturation:0 to setColorTemperature per LIFX's recommendation. (05/22/2017)
  * Verison 1.0.4 - Fixed an issue with setColor() introduced by an api change. (05/19/2017)
  * Version 1.0.3 - Updated the scheduling settings (04/18/2017)
@@ -33,6 +34,10 @@ metadata {
 		capability "Sensor"
 		capability "Switch"
 		capability "Switch Level"
+        
+        command "transitionLevel"
+        command "runEffect"
+        command "apiFlash"
         
         attribute "lastRefresh", "string"
         attribute "refreshText", "string"
@@ -272,6 +277,11 @@ def off() {
 	log("End off().", "DEBUG")
 }
 
+def transitionLevel(value, duration=1.0) {
+	log("transitionLevel(${value}, ${duration})", "DEBUG")
+	setLevel(value, duration)
+}
+
 def setLevel(brightness) {
 	log("Begin setLevel(...)", "DEBUG")
     log("Brightness level selected = ${brightness}.", "INFO")
@@ -289,17 +299,67 @@ def setLevel(brightness) {
 	log("End setLevel(...)", "DEBUG")
 }
 
+def setLevel(value, duration) {
+	log("Begin setting groups level to ${value} over ${duration} seconds.", "DEBUG")
+    
+    commandLIFX(bulb, "PUT", ["brightness": brightnessPercent, "power": "on", "duration": duration])
+    sendEvent(name: "level", value: brightness)
+    if(value > 0) {
+	    sendEvent(name: "switch", value: "on")
+	} else {
+    	sendEvent(name: "switch", value: "off")
+    }
+	
+    log("End setting groups level.", "DEBUG")
+}
+
+def runEffect(effect="pulse", color="blue", from_color="red", cycles=5, period=0.5, brightness=0.5) {
+	log("runEffect(effect=${effect}, color=${color}: 1.0, from_color=${from_color}, cycles=${cycles}, period=${period}, brightness=${brightness}.", "INFO")
+
+	if(effect != "pulse" && effect != "breathe") {
+    	log("${effect} is not a value effect, defaulting to pulse.", "ERROR")
+        effect = "pulse"
+    }
+	
+    commandLIFX(bulb, "POST", ["color" : "${color.toLowerCase()} brightness:${brightness}", "from_color" : "${from_color.toLowerCase()} brightness:${brightness}", "cycles" : "${cycles}" ,"period" : "${period}"], effect)
+}
+
+def apiFlash(cycles=5, period=0.5, brightness1=1.0, brightness2=0.0) {
+    if(brightness1 < 0.0) {
+    	brightness1 = 0.0
+    } else if(brightness1 > 1.0) {
+    	brightness1 = 1.0
+    }
+    
+    if(brightness2 < 0.0) {
+    	brightness2 = 0.0
+    } else if(brightness2 > 1.0) {
+    	brightness2 = 1.0
+    }
+    
+    log("The Group is: ${state.groupsList}", "DEBUG")
+    
+    commandLIFX(	bulb, 
+    				"POST",
+                    ["color" : "brightness:${brightness1}", "from_color" : "brightness:${brightness2}", "cycles" : "${cycles}" ,"period" : "${period}"],
+                    "pulse"
+               )
+}
+
 ////////////   BEGIN LIFX COMMANDS ///////////
 
-def commandLIFX(light, method, commands) {
+def commandLIFX(light, method, commands, effect=null) {
     def rawURL = "https://api.lifx.com"
-    //def rawPath = "/v1/lights/label:" + light + "/state"
     def rawPath = ""
+    
     if(method == "PUT") {
     	rawPath = "/v1/lights/label:" + light + "/state"
+    } else if (effect == "pulse" || effect == "breathe") {
+    	rawPath = "/v1/lights/label:" + light + "/effects/" + effect 
     } else {
     	rawPath = "/v1/lights/label:" + light
     }
+    
     def rawHeaders = ["Content-Type": "application/x-www-form-urlencoded", "Authorization": "Bearer ${token}"]
     def pollParams = [
         uri: rawURL,
@@ -322,6 +382,10 @@ def commandLIFX(light, method, commands) {
             httpPut(pollParams) { resp ->
             	log("response: ${resp}", "DEBUG")
                 return parseResponse(resp)
+            }
+        } else if(method=="POST") {
+            httpPost(pollParams) { resp ->            
+                parseResponse(resp)
             }
         }
     } catch(Exception e) {
@@ -357,33 +421,7 @@ def handleResponse(resp) {
         log("LIFX Service Unreachable!", "INFO")
 		return []
 	}
-    
-    /*
-   
-    [[product:
-    	[company:LIFX, 
-         name:Color 1000, 
-         capabilities:
-         	[has_variable_color_temp:true, 
-            has_color:true], 
-         identifier:lifx_color_a19], 
-         brightness:1.0, 
-         id:d073d512e65d, 
-         location:
-         	[id:x, 
-         	name:Turkey Foot],
-         color:
-         	[saturation:0.0, kelvin:4362, hue:246.38864728770886], 
-         connected:true, 
-         power:off, 
-         label:Office Light, 
-         uuid:xxx-263d-47cd-9b35-182b9610eb40, 
-         last_seen:2016-07-31T20:20:51.168+01:00, 
-         group:
-         	[id:xx, name:Office], 
-         seconds_since_seen:0.00232187]]
-    
-    */    
+
     resp.data.each {
     
     	log("${it.label} is ${it.power}.", "TRACE")

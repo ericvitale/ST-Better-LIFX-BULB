@@ -1,8 +1,9 @@
 /**
- *  Better LIFX Bulb Plus
+ * Better LIFX Bulb Plus
  *
- *  Copyright 2016 Eric Vitale
+ * Copyright 2016 Eric Vitale
  *
+ * Version 1.0.6 - Added the transitionLevel(), apiFlash(), & runEffect() methods. (06/16/2017)
  * Version 1.0.4 - Added saturation:0 to setColorTemperature per LIFX's recommendation. (05/22/2017)
  * Version 1.0.3 - Fixed an issue with setColor() introduced by an api change. (05/19/2017)
  * Version 1.0.2 - More accuracy for setLevel (12/17/2016)
@@ -39,6 +40,9 @@ metadata {
         
         command "irOn", ["number"]
         command "irOff"
+        command "transitionLevel"
+        command "runEffect"
+        command "apiFlash"
 	}
     
     preferences {
@@ -268,10 +272,14 @@ def off() {
 	log("Begin off().", "DEBUG")
     log("Turning bulb off, IR = off.", "INFO")
     commandLIFX(bulb, "PUT", "power=off")
-    //commandLIFX(bulb, "PUT", ["power": "off", "infrared": 0])
     runIn(10, irOn)
     sendEvent(name: "switch", value: "off")
 	log("End off().", "DEBUG")
+}
+
+def transitionLevel(value, duration=1.0) {
+	log("transitionLevel(${value}, ${duration})", "DEBUG")
+	setLevel(value, duration)
 }
 
 def setLevel(brightness) {
@@ -313,17 +321,53 @@ def irOff() {
 	log("End irOff().", "DEBUG")
 }
 
+def runEffect(effect="pulse", color="blue", from_color="red", cycles=5, period=0.5, brightness=0.5) {
+	log("runEffect(effect=${effect}, color=${color}: 1.0, from_color=${from_color}, cycles=${cycles}, period=${period}, brightness=${brightness}.", "INFO")
+
+	if(effect != "pulse" && effect != "breathe") {
+    	log("${effect} is not a value effect, defaulting to pulse.", "ERROR")
+        effect = "pulse"
+    }
+	
+    commandLIFX(bulb, "POST", ["color" : "${color.toLowerCase()} brightness:${brightness}", "from_color" : "${from_color.toLowerCase()} brightness:${brightness}", "cycles" : "${cycles}" ,"period" : "${period}"], effect)
+}
+
+def apiFlash(cycles=5, period=0.5, brightness1=1.0, brightness2=0.0) {
+    if(brightness1 < 0.0) {
+    	brightness1 = 0.0
+    } else if(brightness1 > 1.0) {
+    	brightness1 = 1.0
+    }
+    
+    if(brightness2 < 0.0) {
+    	brightness2 = 0.0
+    } else if(brightness2 > 1.0) {
+    	brightness2 = 1.0
+    }
+    
+    log("The Group is: ${state.groupsList}", "DEBUG")
+    
+    commandLIFX(	bulb, 
+    				"POST",
+                    ["color" : "brightness:${brightness1}", "from_color" : "brightness:${brightness2}", "cycles" : "${cycles}" ,"period" : "${period}"],
+                    "pulse"
+               )
+}
+
 ////////////   BEGIN LIFX COMMANDS ///////////
 
-def commandLIFX(light, method, commands) {
+def commandLIFX(light, method, commands, effect=null) {
     def rawURL = "https://api.lifx.com"
-    //def rawPath = "/v1/lights/label:" + light + "/state"
     def rawPath = ""
+    
     if(method == "PUT") {
     	rawPath = "/v1/lights/label:" + light + "/state"
+    } else if (effect == "pulse" || effect == "breathe") {
+    	rawPath = "/v1/lights/label:" + light + "/effects/" + effect 
     } else {
     	rawPath = "/v1/lights/label:" + light
     }
+    
     def rawHeaders = ["Content-Type": "application/x-www-form-urlencoded", "Authorization": "Bearer ${token}"]
     def pollParams = [
         uri: rawURL,
@@ -346,6 +390,10 @@ def commandLIFX(light, method, commands) {
             httpPut(pollParams) { resp ->
             	log("response: ${resp}", "DEBUG")
                 return parseResponse(resp)
+            }
+        } else if(method=="POST") {
+            httpPost(pollParams) { resp ->            
+                parseResponse(resp)
             }
         }
     } catch(Exception e) {
