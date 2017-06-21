@@ -1,9 +1,10 @@
 /**
- *  LIFX Scene
+ * LIFX Scene
  *
- *  Copyright 2016 Eric Vitale
+ * Copyright 2016 Eric Vitale
  *
- *  Version 1.0.0 - Initial Release (05/31/2017)
+ * Version 1.0.1 - Converted to Async API (06/21/2017)
+ * Version 1.0.0 - Initial Release (05/31/2017)
  *
  *  Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
  *  in compliance with the License. You may obtain a copy of the License at:
@@ -15,6 +16,8 @@
  *  for the specific language governing permissions and limitations under the License.
  *
  */
+
+include 'asynchttp_v1'
 
 metadata {
 	definition (name: "LIFX Scene", namespace: "ericvitale", author: "ericvitale@gmail.com") {
@@ -102,13 +105,14 @@ def parse(String description) {
 }
 
 def push() {
-	activateScene(uuid, defaultTransition)
+	activateScene(scene, defaultTransition)
 	sendEvent(name: "button", value: "pushed", isStateChange: true)
-    log("Scened uuid: ${uuid} activated.", "DEBUG")
 }
 
 def activateScene(uuid, duration=defaultTransition) {
-	commandLIFX(uuid, "PUT", "duration=${duration}")
+	//commandLIFX(uuid, "PUT", "duration=${duration}")
+    def command = ["duration": duration]
+    commandLIFX(uuid, "PUT", command)
 }
 
 ////////////   BEGIN LIFX COMMANDS ///////////
@@ -116,51 +120,30 @@ def commandLIFX(light, method, commands) {
     def rawURL = "https://api.lifx.com"
     def rawPath = ""
     
-    rawPath = "/v1/scenes/scene_id:" + scene + "/activate"
+    rawPath = "/v1/scenes/scene_id:" + light + "/activate"
     
     def rawHeaders = ["Content-Type": "application/x-www-form-urlencoded", "Authorization": "Bearer ${token}"]
     
-    def pollParams = [
+    def params = [
         uri: rawURL,
 		path: rawPath,
 		headers: rawHeaders,
         body: commands
     ]
     
-    log("Full URL/Path = ${rawURL}${rawPath}.", "DEBUG")
+    log("Full URL/Path = ${rawPath}.", "DEBUG")
     log("rawHeaders = ${rawHeaders}.", "DEBUG")
     log("body = ${commands}.", "DEBUG")
     
-    try {
-		httpPut(pollParams) { resp ->
-        	log("response: ${resp}", "DEBUG")
-        	return parseResponse(resp)
-        }
-    } catch(Exception e) {
-        log(e, "ERROR")
-        
-        if(e?.getMessage()?.toUpperCase() == "NOT FOUND") {
-        	log("LIFX did not understand the scene name. It needs to match uuid from the api.", "ERROR")
-        } else if(e?.getMessage()?.toUpperCase() == "UNAUTHORIZED") {
-        	log("The API token you entered is not correct and LFIX will not authorize your remote call.", "ERROR")
-        }
-    }
+    asynchttp_v1.put('responseHandler', params)
 }
 
-private parseResponse(resp) {
-    if (resp.status != 200 && resp.status != 207) {
-        log("LIFX Service Unreachable!", "ERROR")
-		return []
-	}
-    
-    if(resp.data.results[0] != null) {
-    	log("Results: "+resp.data.results[0], "DEBUG")
-        if(resp.data.results[0]["status"] != "ok") {
-        	log("Something didn't work...", "ERROR")
-        }
-        return []
-    }  
-    
-    return resp
+def responseHandler(response, data) {
+
+    if(response.getStatus() == 200 || response.getStatus() == 207) {
+		log("Scene Activated.", "DEBUG")    
+    } else {
+    	log("Scene failed to activate. LIFX returned ${response.getStatus()}.", "ERROR")
+    }
 }
 ////////////// END LIFX COMMANDS /////////////
