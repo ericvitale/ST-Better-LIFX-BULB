@@ -3,6 +3,7 @@
  *
  * Copyright 2016 Eric Vitale
  *
+ * Version 1.1.0 - Updated to use the ST Beta Asynchronous API. (06/21/17)
  * Version 1.0.6 - Added the transitionLevel(), apiFlash(), & runEffect() methods. (06/16/2017)
  * Version 1.0.5 - Added saturation:0 to setColorTemperature per LIFX's recommendation. (05/22/2017)
  * Verison 1.0.4 - Fixed an issue with setColor() introduced by an api change. (05/19/2017)
@@ -21,10 +22,13 @@
  *  for the specific language governing permissions and limitations under the License.
  *
  */
+
+include 'asynchttp_v1'
+
 import java.text.DecimalFormat;
  
 metadata {
-	definition (name: "Better LIFX Bulb", namespace: "ericvitale", author: "ericvitale@gmail.com") {
+	definition (name: "Better LIFX Bulb Async", namespace: "ericvitale", author: "ericvitale@gmail.com") {
 		capability "Actuator"
 		capability "Color Control"
 		capability "Color Temperature"
@@ -256,14 +260,14 @@ def poll() {
 def refresh() {
 	log("Begin refresh().", "DEBUG")
     log("Beginning device update...", "INFO")
-	handleResponse(commandLIFX(bulb, "GET", ""))
+	commandLIFX(bulb, "GET", [])
     log("End refresh().", "DEBUG")
 }
 
 def on() {
 	log("Begin on().", "DEBUG")
     log("Turning bulb on.", "INFO")
-    commandLIFX(bulb, "PUT", "power=on")
+    commandLIFX(bulb, "PUT", ["power" : "on"])
     sendEvent(name: "switch", value: "on")
     refresh()
 	log("End on().", "DEBUG")
@@ -272,7 +276,7 @@ def on() {
 def off() {
 	log("Begin off().", "DEBUG")
     log("Turning bulb off.", "INFO")
-    commandLIFX(bulb, "PUT", "power=off")
+    commandLIFX(bulb, "PUT", ["power" : "off"])
     sendEvent(name: "switch", value: "off")
 	log("End off().", "DEBUG")
 }
@@ -361,124 +365,112 @@ def commandLIFX(light, method, commands, effect=null) {
     }
     
     def rawHeaders = ["Content-Type": "application/x-www-form-urlencoded", "Authorization": "Bearer ${token}"]
-    def pollParams = [
+
+	def params = [
         uri: rawURL,
 		path: rawPath,
 		headers: rawHeaders,
         body: commands
     ]
     
-    log("Full URL/Path = ${rawURL}${rawPath}.", "DEBUG")
+    log("Full URL/Path = ${rawPath}.", "DEBUG")
     log("rawHeaders = ${rawHeaders}.", "DEBUG")
     log("body = ${commands}.", "DEBUG")
     
-    try {
-        if(method=="GET") {
-            httpGet(pollParams) { resp ->
-            	log("response: ${resp}", "DEBUG")
-                return parseResponse(resp)
-            }
-        } else if(method=="PUT") {
-            httpPut(pollParams) { resp ->
-            	log("response: ${resp}", "DEBUG")
-                return parseResponse(resp)
-            }
-        } else if(method=="POST") {
-            httpPost(pollParams) { resp ->            
-                parseResponse(resp)
-            }
-        }
-    } catch(Exception e) {
-        log(e, "ERROR")
-        if(e?.getMessage()?.toUpperCase() == "NOT FOUND") {
-        	log("LIFX did not understand the bulb names. It needs to match what is in your LIFX app and they are case sensitive.", "ERROR")
-        } else if(e?.getMessage()?.toUpperCase() == "UNAUTHORIZED") {
-        	log("The API token you entered is not correct and LFIX will not authorize your remote call.", "ERROR")
-        }
+    if(method=="GET") {
+    	asynchttp_v1.get('getResponseHandler', params)
+    } else if(method=="PUT") {
+    	asynchttp_v1.put('putResponseHandler', params)
+    } else if(method=="POST") {
+    	asynchttp_v1.post('postResponseHandler', params)
+    }   
+}
+
+def postResponseHandler(response, data) {
+
+    if(response.getStatus() == 200 || response.getStatus() == 207) {
+		log("LFIX Success.", "DEBUG")
+        updateDeviceLastActivity(new Date())
+    } else {
+    	log("LIFX failed to adjust bulb. LIFX returned ${response.getStatus()}.", "ERROR")
+        log("Error = ${response.getErrorData()}", "ERROR")
     }
 }
 
-private parseResponse(resp) {
-    if (resp.status == 404) {
-		sendEvent(name: "switch", value: "unreachable")
-        log("LIFX Service Unreachable!", "ERROR")
-		return []
-	}
-    
-    if(resp.data.results[0] != null) {
-    	log("Results: "+resp.data.results[0], "DEBUG")
-        return []
-    }  
-    
-    return resp
+def putResponseHandler(response, data) {
+
+    if(response.getStatus() == 200 || response.getStatus() == 207) {
+		log("LFIX Success.", "DEBUG")
+        updateDeviceLastActivity(new Date())
+    } else {
+    	log("LIFX failed to adjust bulb. LIFX returned ${response.getStatus()}.", "ERROR")
+        log("Error = ${response.getErrorData()}", "ERROR")
+    }
 }
 
-def handleResponse(resp) {
-    log("Response: " + resp.data, "DEBUG")
-    
-    if (resp.status == 404) {
-		sendEvent(name: "switch", value: "unreachable")
-        log("LIFX Service Unreachable!", "INFO")
-		return []
-	}
+def getResponseHandler(response, data) {
 
-    resp.data.each {
-    
-    	log("${it.label} is ${it.power}.", "TRACE")
-        log("Bulb Type: ${it.product.name}.", "TRACE")
-        log("Capabilities? Color Temperature = ${it.product.capabilities.has_variable_color_temp}, Is Color = ${it.product.capabilities.has_color}.", "TRACE")
-        log("Brightness = ${it.brightness}.", "TRACE")
-        log("Color = [saturation:${it.color.saturation}], kelvin:${it.color.kelvin}, hue:${it.color.hue}.", "TRACE")
+    if(response.getStatus() == 200 || response.getStatus() == 207) {
+		log("LFIX Success.", "DEBUG")
+        updateDeviceLastActivity(new Date())
         
-        def refreshT = "${it.label} is ${it.power}"
+       	response.getJson().each {
+        	log("${it.label} is ${it.power}.", "TRACE")
+        	log("Bulb Type: ${it.product.name}.", "TRACE")
+        	log("Capabilities? Color Temperature = ${it.product.capabilities.has_variable_color_temp}, Is Color = ${it.product.capabilities.has_color}.", "TRACE")
+        	log("Brightness = ${it.brightness}.", "TRACE")
+        	log("Color = [saturation:${it.color.saturation}], kelvin:${it.color.kelvin}, hue:${it.color.hue}.", "TRACE")
         
-        DecimalFormat df = new DecimalFormat("###,##0.0#")
-        DecimalFormat dfl = new DecimalFormat("###,##0.000")
-        DecimalFormat df0 = new DecimalFormat("###,##0")
+       		def refreshT = "${it.label} is ${it.power}"
         
-        if(it.power == "on") {
-        	refreshT += " with a brightness of ${df.format(it.brightness * 100)}%. Color @ [saturation:${df.format(it.color.saturation)}], kelvin:${it.color.kelvin}, hue:${dfl.format(it.color.hue)}."
-        } else {
-        	refreshT += "."
-        }
+        	DecimalFormat df = new DecimalFormat("###,##0.0#")
+        	DecimalFormat dfl = new DecimalFormat("###,##0.000")
+        	DecimalFormat df0 = new DecimalFormat("###,##0")
         
-        log("${refreshT}", "INFO")
-        
-        sendEvent(name: "lastRefresh", value: new Date())
-        sendEvent(name: "refreshText", value: refreshT)
-        
-    	if(it.power == "on") {
-        	sendEvent(name: "switch", value: "on")
-			if(it.color.saturation == 0.0) {
-            	log("Saturation is 0.0, setting color temperature.", "DEBUG")
-                
-                def b = df0.format(it.brightness * 100)
-                
-                sendEvent(name: "colorTemperature", value: it.color.kelvin)
-       			sendEvent(name: "color", value: "#ffffff")
-                sendEvent(name: "level", value: b)
-        		sendEvent(name: "switch", value: "on")
+        	if(it.power == "on") {
+        		refreshT += " with a brightness of ${df.format(it.brightness * 100)}%. Color @ [saturation:${df.format(it.color.saturation)}], kelvin:${it.color.kelvin}, hue:${dfl.format(it.color.hue)}."
             } else {
-            	log("Saturation is > 0.0, setting color.", "DEBUG")
-                def h = df.format(it.color.hue)
-                def s = df.format(it.color.saturation)
-                def b = df0.format(it.brightness * 100)
-                
-                log("h = ${h}, s = ${s}.", "INFO")
-                
-                sendEvent(name: "hue", value: h, displayed: true)
-                sendEvent(name: "saturation", value: s, displayed: true)
-                sendEvent(name: "kelvin", value: it.color.kelvin, displayed: true)
-                sendEvent(name: "level", value: b)
-		        sendEvent(name: "switch", value: "on")
+                refreshT += "."
             }
-        } else if(it.power == "off") {
-	        sendEvent(name: "switch", value: "off")
+        
+            log("${refreshT}", "INFO")
+
+            sendEvent(name: "lastRefresh", value: new Date())
+            sendEvent(name: "refreshText", value: refreshT)
+
+            if(it.power == "on") {
+                sendEvent(name: "switch", value: "on")
+                if(it.color.saturation == 0.0) {
+                    log("Saturation is 0.0, setting color temperature.", "DEBUG")
+
+                    def b = df0.format(it.brightness * 100)
+
+                    sendEvent(name: "colorTemperature", value: it.color.kelvin)
+                    sendEvent(name: "color", value: "#ffffff")
+                    sendEvent(name: "level", value: b)
+                    sendEvent(name: "switch", value: "on")
+                } else {
+                    log("Saturation is > 0.0, setting color.", "DEBUG")
+                    def h = df.format(it.color.hue)
+                    def s = df.format(it.color.saturation)
+                    def b = df0.format(it.brightness * 100)
+
+                    log("h = ${h}, s = ${s}.", "INFO")
+
+                    sendEvent(name: "hue", value: h, displayed: true)
+                    sendEvent(name: "saturation", value: s, displayed: true)
+                    sendEvent(name: "kelvin", value: it.color.kelvin, displayed: true)
+                    sendEvent(name: "level", value: b)
+                    sendEvent(name: "switch", value: "on")
+                }
+            } else if(it.power == "off") {
+                sendEvent(name: "switch", value: "off")
+            }
         }
+    } else {
+    	log("LIFX failed to adjust bulb. LIFX returned ${response.getStatus()}.", "ERROR")
+        log("Error = ${response.getErrorData()}", "ERROR")
     }
-    
-    log("Device update received from LIFX...", "INFO")
-    updateDeviceLastActivity(new Date())
 }
 
 ////////////// END LIFX COMMANDS /////////////
