@@ -3,9 +3,11 @@
  *
  * Copyright 2016 Eric Vitale
  *
+ * Version 1.1.0 - Updated to use the ST Beta Asynchronous API. (06/21/17)
  * Version 1.0.6 - Added the transitionLevel(), apiFlash(), & runEffect() methods. (06/16/2017)
- * Version 1.0.4 - Added saturation:0 to setColorTemperature per LIFX's recommendation. (05/22/2017)
- * Version 1.0.3 - Fixed an issue with setColor() introduced by an api change. (05/19/2017)
+ * Version 1.0.5 - Added saturation:0 to setColorTemperature per LIFX's recommendation. (05/22/2017)
+ * Verison 1.0.4 - Fixed an issue with setColor() introduced by an api change. (05/19/2017)
+ * Version 1.0.3 - Updated the scheduling settings (04/18/2017)
  * Version 1.0.2 - More accuracy for setLevel (12/17/2016)
  * Version 1.0.1 - Added additonal logging on refresh method (12/17/2016)
  * Version 1.0.0 - Initial Release (08/08/2016)
@@ -20,6 +22,9 @@
  *  for the specific language governing permissions and limitations under the License.
  *
  */
+
+include 'asynchttp_v1'
+
 import java.text.DecimalFormat;
  
 metadata {
@@ -33,39 +38,24 @@ metadata {
 		capability "Sensor"
 		capability "Switch"
 		capability "Switch Level"
+        capability "Infrared Level"
         
-        attribute "lastRefresh", "string"
-        attribute "refreshText", "string"
-        attribute "irState", "string"
-        
-        command "irOn", ["number"]
-        command "irOff"
         command "transitionLevel"
         command "runEffect"
         command "apiFlash"
+        command "apiBreathe"
+        command "irOn", ["number"]
+        command "irOff"
+        
+        attribute "lastRefresh", "string"
+        attribute "refreshText", "string"
 	}
     
     preferences {
-       	section("Bulb Configuration") {
-            input "token", "text", title: "API Token", required: true
-            input title: "LFIX API", description: "The LIFX API token is required to use your account. Navigate to https://cloud.lifx.com, sign in and then go to the settings section and select generate new token.", type: "paragraph", element: "paragraph"
-
-            input "bulb", "text", title: "Bulb Name", required: true
-            input title: "Bulb Name Help", description: "This is the name of the bulb found in the LIFX app, it is case sensitive. It must be entered exactly as you named it in the LIFX app.", type: "paragraph", element: "paragraph"
-            
-            input "ir", "decimal", title: "IR Level", required: true, range: "0..1"
-        }
-       
-       	section("Settings") {
-	        input "logging", "enum", title: "Log Level", required: false, defaultValue: "INFO", options: ["TRACE", "DEBUG", "INFO", "WARN", "ERROR"]
-            input "turnOnWithAdjustments", "bool", title: "Turn on lights when making adjustments?", required: true, defaultValue: true
-
-			input title: "Schedule Help", description: "This setting will schedule the device handler to request updates from the LIFX cloud to keep the SmartThings device up to date if you use other means (LIFX App) to set the device.", type: "paragraph", element: "paragraph"
-            input "useSchedule", "bool", title: "Refresh on Schedule?", required: false, defaultValue: true, submitOnChange: true
-            input "frequency", "number", title: "Every X Minutes", required: false, range: "1..*", defaultValue: 15
-       	 	input "startHour", "number", title: "Schedule Start Hour", required: false, range: "0..23", defaultValue: 0
-       		input "endHour", "number", title: "Schedule End Hour", required: false, range: "0..23", defaultValue: 23
-        }
+    	input "token", "text", title: "API Token", required: true
+        input "bulb", "text", title: "Bulb Name", required: true
+        input "defaultTransition", "decimal", title: "Default Transition Time", required: true, defaultValue: 0.0
+	    input "logging", "enum", title: "Log Level", required: false, defaultValue: "INFO", options: ["TRACE", "DEBUG", "INFO", "WARN", "ERROR"]
     }
 
 	tiles(scale: 2) {
@@ -174,24 +164,19 @@ def log(data, type) {
 }
 
 def installed() {
-	log("Begin installed().", "DEBUG")
 	initialize()
-    log("End installed().", "DEBUG")
 }
 
 def updated() {
-	log("Begin updated().", "DEBUG")
 	initialize()
-    log("End updated().", "DEBUG")
 }
 
 def initialize() {
-	log("Begin initialize.", "DEBUG")
-    runIn(2, refresh)
-    log("Scheduling initial refresh...", "INFO")
-    setupSchedule()
-    log("Setup refresh schedule...", "INFO")
-	log("End initialize.", "DEBUG")
+	log("Initializing bulb...", "DEBUG")
+    
+    setDefaultTransitionDuration(defaultTransition)
+    setBulbName(bulb)
+	setupSchedule()
 }
 
 def configure() {
@@ -199,50 +184,70 @@ def configure() {
 }
 
 def parse(String description) {
-	log("Parsing '${description}'". "DEBUG")
 }
 
 def setHue(val) {
-	log("setHue() is unsuppored by this DH.", "WARN")
+	log("Begin setting groups hue to ${val}.", "DEBUG")
+    
+    sendLIFXCommand([color: "hue:${val}"])
+    
+    sendEvent(name: "hue", value: val)
+    sendEvent(name: "switch", value: "on")
+    sendEvent(name: "level", value: "${state.level}")
 }
 
 def setSaturation() {
-	log("setSaturation() is unsuppored by this DH.", "WARN")
+	log("Begin setting groups saturation to ${val}.", "DEBUG")
+    
+    sendLIFXCommand([color: "saturation:${val}"])
+    
+    sendEvent(name: "saturation", value: val)
+    sendEvent(name: "switch", value: "on")
+    sendEvent(name: "level", value: "${state.level}")
 }
 
-def setColor(setColor) {
-	log("Begin setColor(${setColor}).", "DEBUG")
-    log("Color HEX: ${setColor.hex}.", "DEBUG")
-
-    def hue = setColor.hue * 3.6
-    def saturation = setColor.saturation / 100
+def setColor(value) {
+	log("Begin setting groups color to ${value}.", "DEBUG")
     
-    if(turnOnWithAdjustments) {
-    	commandLIFX(bulb, "PUT", [color: "saturation:${saturation} hue:${hue}", power: "on"])
-    	sendEvent(name: "color", value: setColor.hex)
-        sendEvent(name: "switch", value: "on")
-    } else {
-        commandLIFX(bulb, "PUT", [color: "saturation:${saturation} hue:${hue}"])
-    	sendEvent(name: "color", value: setColor.hex)
-    }
+    def data = [:]
+    data.hue = value.hue
+    data.saturation = value.saturation
+    data.level = device.currentValue("level")
     
-    log("End setColor(${value}).", "DEBUG")
+    sendLIFXCommand([color: "saturation:${data.saturation / 100} hue:${data.hue * 3.6}"])
+    
+    sendEvent(name: "hue", value: value.hue)
+    sendEvent(name: "saturation", value: value.saturation)
+    sendEvent(name: "color", value: value.hex)
+    sendEvent(name: "switch", value: "on")
+    sendEvent(name: "level", value: "${state.level}")
 }
 
-def setColorTemperature(colorTemperature) {
-	log("Begin on().", "DEBUG")
-    log("Color temperature selected = ${colorTemperature}K.", "INFO")
-    if(turnOnWithAdjustments) {
-    	commandLIFX(bulb, "PUT", [color: "kelvin:${colorTemperature saturation:0}", power: "on"])
-    	sendEvent(name: "colorTemperature", value: colorTemperature)
-        sendEvent(name: "color", value: "#ffffff")
-        sendEvent(name: "switch", value: "on")
-    } else {
-        commandLIFX(bulb, "PUT", "color=kelvin:${colorTemperature}")
-    	sendEvent(name: "colorTemperature", value: colorTemperature)
-    }
+def setColorTemperature(value) {
+	log("Begin setting groups color temperature to ${value}.", "DEBUG")
+    sendLIFXCommand([color: "kelvin:${value} saturation:0"])
+	sendEvent(name: "colorTemperature", value: value)
+	sendEvent(name: "color", value: "#ffffff")
+	sendEvent(name: "saturation", value: 0)
+    sendEvent(name: "level", value: "${state.level}")
+}
 
-	log("End on().", "DEBUG")
+def setInfraredLevel(level) {
+	log("Begin setting bulbs infrared level to ${level}.", "DEBUG")
+    
+    if (level > 100) {
+		level = 100
+	} else if (level <= 0 || level == null) {
+		sendEvent(name: "level", value: 0)
+		return off()
+	}
+    
+    state.infraredLevel = level
+	sendEvent(name: "infraredLevel", value: level)
+    
+    def infrared = level / 100
+   
+    sendLIFXCommand(["infrared": infrared])
 }
 
 def poll() {
@@ -251,74 +256,52 @@ def poll() {
 }
 
 def refresh() {
-	log("Begin refresh().", "DEBUG")
     log("Beginning device update...", "INFO")
-	handleResponse(commandLIFX(bulb, "GET", ""))
-    log("End refresh().", "DEBUG")
+	sendLIFXInquiry()
+}
+
+def irOn(val) {
+	setInfraredLevel(val)
+}
+
+def irOff() {
+	setInfraredLevel(0)
 }
 
 def on() {
-	log("Begin on().", "DEBUG")
     log("Turning bulb on.", "INFO")
-    commandLIFX(bulb, "PUT", "power=on")
-    //commandLIFX(bulb, "PUT", ["power": "on", "infrared": 0.8])
-    runIn(10, irOff)
+    sendLIFXCommand(["power" : "on", "duration" : "0.0"])
     sendEvent(name: "switch", value: "on")
-    refresh()
-	log("End on().", "DEBUG")
 }
 
 def off() {
-	log("Begin off().", "DEBUG")
-    log("Turning bulb off, IR = off.", "INFO")
-    commandLIFX(bulb, "PUT", "power=off")
-    runIn(10, irOn)
+    log("Turning bulb off.", "INFO")
+    sendLIFXCommand(["power" : "off", "duration" : "0.0"])
     sendEvent(name: "switch", value: "off")
-	log("End off().", "DEBUG")
 }
 
-def transitionLevel(value, duration=1.0) {
+def transitionLevel(value, duration=getDefaultTransitionDuration()) {
 	log("transitionLevel(${value}, ${duration})", "DEBUG")
 	setLevel(value, duration)
 }
 
-def setLevel(brightness) {
-	log("Begin setLevel(...)", "DEBUG")
-    log("Brightness level selected = ${brightness}.", "INFO")
-    def brightnessPercent = brightness / 100
+def setLevel(level, duration=getDefaultTransitionDuration()) {
+	log("Begin setting groups level to ${level} over ${duration} seconds.", "DEBUG")
     
-    if(turnOnWithAdjustments) {
-	    commandLIFX(bulb, "PUT", ["brightness": brightnessPercent, "power": "on"])
-        sendEvent(name: "level", value: brightness)
-        sendEvent(name: "switch", value: "on")
-    } else {
-    	commandLIFX(bulb, "PUT", ["brightness": brightnessPercent])
-        sendEvent(name: "level", value: brightness)
-    }
+    if (level > 100) {
+		level = 100
+	} else if (level <= 0 || level == null) {
+		sendEvent(name: "level", value: 0)
+		return off()
+	}
     
-	log("End setLevel(...)", "DEBUG")
-}
-
-def irOn() {
-	irOn(ir)
-}
-
-def irOn(val) {
-	log("Begin irOn(${val}).", "DEBUG")
-    DecimalFormat df = new DecimalFormat("###,##0.#")
-    def newVal = df.format(val)
-    log("newVal = ${newVal}.", "DEBUG")
-    commandLIFX(bulb, "PUT", ["infrared": val])
-    val = val * 100
-    sendEvent(name: "irState", value: "on", descriptionText: "Infrared is at ${val}%.")
-	log("End irOn().", "DEBUG")
-}
-
-def irOff() {
-	log("Begin irOff().", "DEBUG")
-    commandLIFX(bulb, "PUT", "infrared=0")
-    sendEvent(name: "irState", value: "off", descriptionText: "Infrared is at 0%.")
-	log("End irOff().", "DEBUG")
+    state.level = level
+	sendEvent(name: "level", value: level)
+    sendEvent(name: "switch", value: "on")
+    
+    def brightness = level / 100
+   
+    sendLIFXCommand(["brightness": brightness, "power": "on", "duration" : duration])
 }
 
 def runEffect(effect="pulse", color="blue", from_color="red", cycles=5, period=0.5, brightness=0.5) {
@@ -329,7 +312,7 @@ def runEffect(effect="pulse", color="blue", from_color="red", cycles=5, period=0
         effect = "pulse"
     }
 	
-    commandLIFX(bulb, "POST", ["color" : "${color.toLowerCase()} brightness:${brightness}", "from_color" : "${from_color.toLowerCase()} brightness:${brightness}", "cycles" : "${cycles}" ,"period" : "${period}"], effect)
+    runLIFXEffect(["color" : "${color.toLowerCase()} brightness:${brightness}".trim(), "from_color" : "${from_color.toLowerCase()} brightness:${brightness}".trim(), "cycles" : "${cycles}" ,"period" : "${period}"], effect)
 }
 
 def apiFlash(cycles=5, period=0.5, brightness1=1.0, brightness2=0.0) {
@@ -345,181 +328,226 @@ def apiFlash(cycles=5, period=0.5, brightness1=1.0, brightness2=0.0) {
     	brightness2 = 1.0
     }
     
-    log("The Group is: ${state.groupsList}", "DEBUG")
-    
-    commandLIFX(	bulb, 
-    				"POST",
-                    ["color" : "brightness:${brightness1}", "from_color" : "brightness:${brightness2}", "cycles" : "${cycles}" ,"period" : "${period}"],
-                    "pulse"
-               )
+    runLIFXEffect(["color" : "brightness:${brightness1}", "from_color" : "brightness:${brightness2}", "cycles" : "${cycles}" ,"period" : "${period}"], "pulse")
 }
 
-////////////   BEGIN LIFX COMMANDS ///////////
-
-def commandLIFX(light, method, commands, effect=null) {
-    def rawURL = "https://api.lifx.com"
-    def rawPath = ""
+def apiBreathe(cycles=3, period=2.0, brightness1=1.0, brightness2=0.0) {
     
-    if(method == "PUT") {
-    	rawPath = "/v1/lights/label:" + light + "/state"
-    } else if (effect == "pulse" || effect == "breathe") {
-    	rawPath = "/v1/lights/label:" + light + "/effects/" + effect 
-    } else {
-    	rawPath = "/v1/lights/label:" + light
+    if(brightness1 < 0.0) {
+    	brightness1 = 0.0
+    } else if(brightness1 > 1.0) {
+    	brightness1 = 1.0
     }
     
-    def rawHeaders = ["Content-Type": "application/x-www-form-urlencoded", "Authorization": "Bearer ${token}"]
-    def pollParams = [
-        uri: rawURL,
-		path: rawPath,
-		headers: rawHeaders,
+    if(brightness2 < 0.0) {
+    	brightness2 = 0.0
+    } else if(brightness2 > 1.0) {
+    	brightness2 = 1.0
+    }
+
+	runLIFXEffect(["color" : "brightness:${brightness1}", "from_color" : "brightness:${brightness2}", "cycles" : "${cycles}" ,"period" : "${period}"], "breathe")
+}
+
+def setBulbName(value) {
+	state.bulbName = value
+}
+
+def getBulbName() {
+	return state.bulbName
+}
+
+def setDefaultTransitionDuration(value) {
+	state.transitionDuration = value
+}
+
+def getDefaultTransitionDuration() {
+	return state.transitionDuration
+}
+
+def getLastCommand() {
+	return state.lastCommand
+}
+
+def setLastCommand(command) {
+	state.lastCommand = command
+}
+
+def incRetryCount() {
+	state.retryCount = state.retryCount + 1
+}
+
+def resetRetryCount() {
+	state.retryCount = 0
+}
+
+def getRetryCount() {
+	return state.retryCount
+}
+
+def getMaxRetry() {
+	return 3
+}
+
+def getRetryWait(base, count) {
+	
+    if(count == 0) {
+    	return base
+    } else {
+    	return base * (6 * count)
+    }
+}
+
+def retry() {
+	if(getRetryCount() < getMaxRetry()) {
+    	log("Retrying command...", "INFO")
+		runIn( getRetryWait(5, getRetryCount() ), sendLastCommand )
+    } else {
+    	log("Too many retries...", "WARN")
+        resetRetryCount()
+    }
+}
+
+def sendLastCommand() {
+	sendLIFXCommand(getLastCommand())
+}
+
+def sendLIFXCommand(commands) {
+
+	setLastCommand(commands)
+    
+    def params = [
+        uri: "https://api.lifx.com",
+		path: "/v1/lights/label:" + getBulbName() + "/state",
+        headers: ["Content-Type": "application/json", "Accept": "application/json", "Authorization": "Bearer ${token}"],
         body: commands
     ]
     
-    log("Full URL/Path = ${rawURL}${rawPath}.", "DEBUG")
-    log("rawHeaders = ${rawHeaders}.", "DEBUG")
-    log("body = ${commands}.", "DEBUG")
+    asynchttp_v1.put('putResponseHandler', params)
+}
+
+def runLIFXEffect(commands, effect) {
+
+	def params = [
+        uri: "https://api.lifx.com",
+		path: "/v1/lights/label:" + getBulbName() + "/effects/" + effect,
+        headers: ["Content-Type": "application/json", "Accept": "application/json", "Authorization": "Bearer ${token}"],
+        body: commands
+    ]
     
-    try {
-        if(method=="GET") {
-            httpGet(pollParams) { resp ->
-            	log("response: ${resp}", "DEBUG")
-                return parseResponse(resp)
-            }
-        } else if(method=="PUT") {
-            httpPut(pollParams) { resp ->
-            	log("response: ${resp}", "DEBUG")
-                return parseResponse(resp)
-            }
-        } else if(method=="POST") {
-            httpPost(pollParams) { resp ->            
-                parseResponse(resp)
-            }
-        }
-    } catch(Exception e) {
-        log(e, "ERROR")
-        if(e?.getMessage()?.toUpperCase() == "NOT FOUND") {
-        	log("LIFX did not understand the bulb names. It needs to match what is in your LIFX app and they are case sensitive.", "ERROR")
-        } else if(e?.getMessage()?.toUpperCase() == "UNAUTHORIZED") {
-        	log("The API token you entered is not correct and LFIX will not authorize your remote call.", "ERROR")
-        }
+    asynchttp_v1.post('postResponseHandler', params)
+}
+
+def sendLIFXInquiry() {
+
+	def params = [
+        uri: "https://api.lifx.com",
+		path: "/v1/lights/label:" + getBulbName(),
+        headers: ["Content-Type": "application/x-www-form-urlencoded", "Authorization": "Bearer ${token}"]
+    ]
+    
+    asynchttp_v1.get('getResponseHandler', params)
+}
+
+def postResponseHandler(response, data) {
+
+    if(response.getStatus() == 200 || response.getStatus() == 207) {
+		log("LFIX Success.", "DEBUG")
+    } else {
+    	log("LIFX failed to adjust group. LIFX returned ${response.getStatus()}.", "ERROR")
+        log("Error = ${response.getErrorData()}", "ERROR")
     }
 }
 
-private parseResponse(resp) {
-    if (resp.status == 404) {
-		sendEvent(name: "switch", value: "unreachable")
-        log("LIFX Service Unreachable!", "ERROR")
-		return []
-	}
-    
-    if(resp.data.results[0] != null) {
-    	log("Results: "+resp.data.results[0], "DEBUG")
-        return []
-    }  
-    
-    return resp
-}
+def putResponseHandler(response, data) {
 
-def handleResponse(resp) {
-    log("Response: " + resp.data, "DEBUG")
-    
-    if (resp.status == 404) {
-		sendEvent(name: "switch", value: "unreachable")
-        log("LIFX Service Unreachable!", "INFO")
-		return []
-	}
-    
-    /*
-   
-    [[product:
-    	[company:LIFX, 
-         name:Color 1000, 
-         capabilities:
-         	[has_variable_color_temp:true, 
-            has_color:true], 
-         identifier:lifx_color_a19], 
-         brightness:1.0, 
-         id:d073d512e65d, 
-         location:
-         	[id:x, 
-         	name:Turkey Foot],
-         color:
-         	[saturation:0.0, kelvin:4362, hue:246.38864728770886], 
-         connected:true, 
-         power:off, 
-         label:Office Light, 
-         uuid:xxx-263d-47cd-9b35-182b9610eb40, 
-         last_seen:2016-07-31T20:20:51.168+01:00, 
-         group:
-         	[id:xx, name:Office], 
-         seconds_since_seen:0.00232187]]
-    
-    */    
-    resp.data.each {
-    
-    	log("${it.label} is ${it.power}.", "TRACE")
-        log("Bulb Type: ${it.product.name}.", "TRACE")
-        log("Capabilities? Color Temperature = ${it.product.capabilities.has_variable_color_temp}, Is Color = ${it.product.capabilities.has_color}.", "TRACE")
-        log("Brightness = ${it.brightness}.", "TRACE")
-        log("Color = [saturation:${it.color.saturation}], kelvin:${it.color.kelvin}, hue:${it.color.hue}.", "TRACE")
+    if(response.getStatus() == 200 || response.getStatus() == 207) {
+		log("LFIX Success.", "DEBUG")
         
-        def refreshT = "${it.label} is ${it.power}"
+        log("Response = ${response.getJson()}", "DEBUG") //<<<<----
         
-        DecimalFormat df = new DecimalFormat("###,##0.0#")
-        DecimalFormat dfl = new DecimalFormat("###,##0.000")
-        DecimalFormat df0 = new DecimalFormat("###,##0")
+        def totalBulbs = response.getJson().results.length()
+        def results = response.getJson().results
+        def bulbsOk = 0
         
-        if(it.power == "on") {
-        	refreshT += " with a brightness of ${df.format(it.brightness * 100)}%. Color @ [saturation:${df.format(it.color.saturation)}], kelvin:${it.color.kelvin}, hue:${dfl.format(it.color.hue)}."
-        } else {
-        	refreshT += "."
-        }
-        
-        log("${refreshT}", "INFO")
-        
-        sendEvent(name: "lastRefresh", value: new Date())
-        sendEvent(name: "refreshText", value: refreshT)
-        
-    	if(it.power == "on") {
-        	sendEvent(name: "switch", value: "on")
-			if(it.color.saturation == 0.0) {
-            	log("Saturation is 0.0, setting color temperature.", "DEBUG")
-                
-                def b = df0.format(it.brightness * 100)
-                
-                sendEvent(name: "colorTemperature", value: it.color.kelvin)
-       			sendEvent(name: "color", value: "#ffffff")
-                sendEvent(name: "level", value: b)
-        		sendEvent(name: "switch", value: "on")
+        for(int i=0;i<totalBulbs;i++) {
+        	if(results[i].status != "ok") {
+        		log("${results[i].label} is ${results[i].status}.", "WARN")
             } else {
-            	log("Saturation is > 0.0, setting color.", "DEBUG")
-                def h = df.format(it.color.hue)
-                def s = df.format(it.color.saturation)
-                def b = df0.format(it.brightness * 100)
-                
-                log("h = ${h}, s = ${s}.", "INFO")
-                
-                sendEvent(name: "hue", value: h, displayed: true)
-                sendEvent(name: "saturation", value: s, displayed: true)
-                sendEvent(name: "kelvin", value: it.color.kelvin, displayed: true)
-                sendEvent(name: "level", value: b)
-		        sendEvent(name: "switch", value: "on")
+            	bulbsOk++
+            	log("${results[i].label} is ${results[i].status}.", "TRACE")
             }
-        } else if(it.power == "off") {
-	        sendEvent(name: "switch", value: "off")
         }
+        
+        if(bulbsOk == totalBulbs) { 
+            log("${bulbsOk} of ${totalBulbs} bulbs returned ok.", "INFO")
+            resetRetryCount()
+        } else {
+        	log("${bulbsOk} of ${totalBulbs} bulbs returned ok.", "WARN")
+            retry()
+        }
+
+        updateDeviceLastActivity(new Date())
+        
+    } else {
+    	log("LIFX failed to adjust group. LIFX returned ${response.getStatus()}.", "ERROR")
+        log("Error = ${response.getErrorData()}", "ERROR")
     }
-    
-    log("Device update received from LIFX...", "INFO")
-    updateDeviceLastActivity(new Date())
 }
 
-////////////// END LIFX COMMANDS /////////////
+def getResponseHandler(response, data) {
+
+    if(response.getStatus() == 200 || response.getStatus() == 207) {
+		log("LFIX Success.", "DEBUG")
+        
+        log("Response ${response.getJson()}", "DEBUG")
+        
+       	response.getJson().each {
+        	log("${it.label} is ${it.power}.", "TRACE")
+        	log("Bulb Type: ${it.product.name}.", "TRACE")
+        	log("Capabilities? Color Temperature = ${it.product.capabilities.has_variable_color_temp}, Is Color = ${it.product.capabilities.has_color}.", "TRACE")
+        	log("Brightness = ${it.brightness}.", "TRACE")
+        	log("Color = [saturation:${it.color.saturation}], kelvin:${it.color.kelvin}, hue:${it.color.hue}.", "TRACE")
+        
+        	DecimalFormat df = new DecimalFormat("###,##0.0#")
+        	DecimalFormat dfl = new DecimalFormat("###,##0.000")
+        	DecimalFormat df0 = new DecimalFormat("###,##0")
+
+            if(it.power == "on") {
+                sendEvent(name: "switch", value: "on")
+                if(it.color.saturation == 0.0) {
+                    log("Saturation is 0.0, setting color temperature.", "TRACE")
+
+                    def b = df0.format(it.brightness * 100)
+
+                    sendEvent(name: "colorTemperature", value: it.color.kelvin)
+                    sendEvent(name: "color", value: "#ffffff")
+                    sendEvent(name: "level", value: b)
+                    sendEvent(name: "switch", value: "on")
+                } else {
+                    log("Saturation is > 0.0, setting color.", "TRACE")
+                    def h = df.format(it.color.hue)
+                    def s = df.format(it.color.saturation)
+                    def b = df0.format(it.brightness * 100)
+
+                    log("h = ${h}, s = ${s}, b = ${b}.", "TRACE")
+
+                    sendEvent(name: "hue", value: h, displayed: true)
+                    sendEvent(name: "saturation", value: s, displayed: true)
+                    sendEvent(name: "kelvin", value: it.color.kelvin, displayed: true)
+                    sendEvent(name: "level", value: b)
+                    sendEvent(name: "switch", value: "on")
+                }
+            } else if(it.power == "off") {
+                sendEvent(name: "switch", value: "off")
+            }
+        }
+    } else {
+    	log("LIFX failed to update the group. LIFX returned ${response.getStatus()}.", "ERROR")
+        log("Error = ${response.getErrorData()}", "ERROR")
+    }
+}
 
 def setupSchedule() {
-	log("Begin setupSchedule().", "DEBUG")
-    
     try {
 	    unschedule(refresh)
     } catch(e) {
@@ -527,19 +555,8 @@ def setupSchedule() {
         log("Exception ${e}", "ERROR")
         return
     }
-
-	log("useSchedule = ${useSchedule}.", "DEBUG")
     
-    if(useSchedule) {
-        
-        try {
-        	schedule("17 0/${frequency.toString()} ${startHour.toString()}-${endHour.toString()} * * ?", refresh)
-            log("Refresh scheduled to run every ${frequency.toString()} minutes between hours ${startHour.toString()}-${endHour.toString()}.", "INFO")
-        } catch(e) {
-        	log("Failed to set schedule!", "ERROR")
-            log("Exception ${e}", "ERROR")
-        } 
-    }
+    runEvery1Minute(refresh)
     
     log("End setupSchedule().", "DEBUG")
 }
