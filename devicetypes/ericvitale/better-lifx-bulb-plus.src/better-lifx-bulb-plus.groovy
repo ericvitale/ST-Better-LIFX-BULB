@@ -353,6 +353,9 @@ def setBulbName(value) {
 }
 
 def getBulbName() {
+	if(state.bulbName == null || state.bulbName == "") {
+    	setBulbName(bulb)
+    }
 	return state.bulbName
 }
 
