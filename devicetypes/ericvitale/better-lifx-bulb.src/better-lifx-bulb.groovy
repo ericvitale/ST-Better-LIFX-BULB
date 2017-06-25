@@ -3,6 +3,7 @@
  *
  * Copyright 2016 Eric Vitale
  *
+ * Version 1.1.1 - Added setLevelAndTemperature method to allow webCoRE set both with a single command. (06/25/2017)
  * Version 1.1.0 - Updated to use the ST Beta Asynchronous API. (06/21/17)
  * Version 1.0.6 - Added the transitionLevel(), apiFlash(), & runEffect() methods. (06/16/2017)
  * Version 1.0.5 - Added saturation:0 to setColorTemperature per LIFX's recommendation. (05/22/2017)
@@ -43,6 +44,7 @@ metadata {
         command "runEffect"
         command "apiFlash"
         command "apiBreathe"
+        command "setLevelAndTemperature"
         
         attribute "lastRefresh", "string"
         attribute "refreshText", "string"
@@ -184,7 +186,7 @@ def parse(String description) {
 }
 
 def setHue(val) {
-	log("Begin setting groups hue to ${val}.", "DEBUG")
+	log("Setting bulb hue to ${val}.", "DEBUG")
     
     sendLIFXCommand([color: "hue:${val}"])
     
@@ -194,7 +196,7 @@ def setHue(val) {
 }
 
 def setSaturation() {
-	log("Begin setting groups saturation to ${val}.", "DEBUG")
+	log("Setting bulb saturation to ${val}.", "DEBUG")
     
     sendLIFXCommand([color: "saturation:${val}"])
     
@@ -204,7 +206,7 @@ def setSaturation() {
 }
 
 def setColor(value) {
-	log("Begin setting groups color to ${value}.", "DEBUG")
+	log("Setting bulb color to ${value}.", "DEBUG")
     
     def data = [:]
     data.hue = value.hue
@@ -221,7 +223,7 @@ def setColor(value) {
 }
 
 def setColorTemperature(value) {
-	log("Begin setting groups color temperature to ${value}.", "DEBUG")
+	log("Setting bulb color temperature to ${value}.", "DEBUG")
     sendLIFXCommand([color: "kelvin:${value} saturation:0"])
 	sendEvent(name: "colorTemperature", value: value)
 	sendEvent(name: "color", value: "#ffffff")
@@ -257,7 +259,7 @@ def transitionLevel(value, duration=getDefaultTransitionDuration()) {
 }
 
 def setLevel(level, duration=getDefaultTransitionDuration()) {
-	log("Begin setting groups level to ${level} over ${duration} seconds.", "DEBUG")
+	log("Setting bulb level to ${level} over ${duration} seconds.", "DEBUG")
     
     if (level > 100) {
 		level = 100
@@ -273,6 +275,34 @@ def setLevel(level, duration=getDefaultTransitionDuration()) {
     def brightness = level / 100
    
     sendLIFXCommand(["brightness": brightness, "power": "on", "duration" : duration])
+}
+
+def setLevelAndTemperature(level, temperature, duration=getDefaultTransitionDuration()) {
+	log("Setting bulb level to ${level} and color temperature to ${temperature} over ${duration} seconds.", "INFO")
+    
+    if (level > 100) {
+		level = 100
+	} else if (level <= 0 || level == null) {
+		sendEvent(name: "level", value: 0)
+		return off()
+	}
+    
+    if(temperature < 2500) {
+    	temperature = 2500
+    } else if(temperature > 9000) {
+    	temperature = 9000
+    }
+    
+    state.level = level
+	sendEvent(name: "level", value: level)
+    sendEvent(name: "switch", value: "on")
+	sendEvent(name: "colorTemperature", value: temperature)
+	sendEvent(name: "color", value: "#ffffff")
+	sendEvent(name: "saturation", value: 0)
+    
+    def brightness = level / 100
+    
+    sendLIFXCommand([color : "kelvin:${temperature} saturation:0 brightness:${brightness}", "power" : "on", "duration" : duration])
 }
 
 def runEffect(effect="pulse", color="blue", from_color="red", cycles=5, period=0.5, brightness=0.5) {
