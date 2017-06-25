@@ -452,6 +452,7 @@ def postResponseHandler(response, data) {
 
     if(response.getStatus() == 200 || response.getStatus() == 207) {
 		log("LFIX Success.", "DEBUG")
+        updateDeviceLastActivity(new Date())
     } else {
     	log("LIFX failed to adjust group. LIFX returned ${response.getStatus()}.", "ERROR")
         log("Error = ${response.getErrorData()}", "ERROR")
@@ -480,6 +481,7 @@ def putResponseHandler(response, data) {
         
         if(bulbsOk == totalBulbs) { 
             log("${bulbsOk} of ${totalBulbs} bulbs returned ok.", "INFO")
+            updateDeviceLastActivity(new Date())
             resetRetryCount()
         } else {
         	log("${bulbsOk} of ${totalBulbs} bulbs returned ok.", "WARN")
@@ -502,6 +504,7 @@ def getResponseHandler(response, data) {
         log("Response ${response.getJson()}", "DEBUG")
         
        	response.getJson().each {
+        	updateDeviceLastActivity(new Date())
         	log("${it.label} is ${it.power}.", "TRACE")
         	log("Bulb Type: ${it.product.name}.", "TRACE")
         	log("Capabilities? Color Temperature = ${it.product.capabilities.has_variable_color_temp}, Is Color = ${it.product.capabilities.has_color}.", "TRACE")
