@@ -1,18 +1,21 @@
 /**
- * Better LIFX Bulb Plus
+ *  Better LIFX Bulb Plus
  *
- * Copyright 2016 Eric Vitale
+ *  Copyright 2016 Eric Vitale
  *
- * Version 1.1.2 - Added the ability to use separate durations for on/off and setLevel commands. (06/26/2017)
- * Version 1.1.1 - Added setLevelAndTemperature method to allow webCoRE set both with a single command. (06/25/2017)
- * Version 1.1.0 - Updated to use the ST Beta Asynchronous API. (06/21/17)
- * Version 1.0.6 - Added the transitionLevel(), apiFlash(), & runEffect() methods. (06/16/2017)
- * Version 1.0.5 - Added saturation:0 to setColorTemperature per LIFX's recommendation. (05/22/2017)
- * Verison 1.0.4 - Fixed an issue with setColor() introduced by an api change. (05/19/2017)
- * Version 1.0.3 - Updated the scheduling settings (04/18/2017)
- * Version 1.0.2 - More accuracy for setLevel (12/17/2016)
- * Version 1.0.1 - Added additonal logging on refresh method (12/17/2016)
- * Version 1.0.0 - Initial Release (08/08/2016)
+ *  Version 1.1.2 - Added the ability to use separate durations for on/off and setLevel commands. (06/26/2017)
+ *  Version 1.1.1 - Added setLevelAndTemperature method to allow webCoRE set both with a single command. (06/25/2017)
+ *  Version 1.1.0 - Updated to use the ST Beta Asynchronous API. (06/21/17)
+ *  Version 1.0.6 - Added the transitionLevel(), apiFlash(), & runEffect() methods. (06/16/2017)
+ *  Version 1.0.5 - Added saturation:0 to setColorTemperature per LIFX's recommendation. (05/22/2017)
+ *  Verison 1.0.4 - Fixed an issue with setColor() introduced by an api change. (05/19/2017)
+ *  Version 1.0.3 - Updated the scheduling settings (04/18/2017)
+ *  Version 1.0.2 - More accuracy for setLevel (12/17/2016)
+ *  Version 1.0.1 - Added additonal logging on refresh method (12/17/2016)
+ *  Version 1.0.0 - Initial Release (08/08/2016)
+ *
+ *  This SmartThings device handler can be found @ https://github.com/ericvitale/ST-Better-LIFX-BULB
+ *  You can find my other SmartApps or Device Handlers @ https://github.com/ericvitale
  *
  *  Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
  *  in compliance with the License. You may obtain a copy of the License at:
