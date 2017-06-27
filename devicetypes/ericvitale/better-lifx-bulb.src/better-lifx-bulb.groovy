@@ -3,6 +3,7 @@
  *
  * Copyright 2016 Eric Vitale
  *
+ * Version 1.1.2 - Added the ability to use separate durations for on/off and setLevel commands. (06/26/2017)
  * Version 1.1.1 - Added setLevelAndTemperature method to allow webCoRE set both with a single command. (06/25/2017)
  * Version 1.1.0 - Updated to use the ST Beta Asynchronous API. (06/21/17)
  * Version 1.0.6 - Added the transitionLevel(), apiFlash(), & runEffect() methods. (06/16/2017)
@@ -53,7 +54,8 @@ metadata {
     preferences {
     	input "token", "text", title: "API Token", required: true
         input "bulb", "text", title: "Bulb Name", required: true
-        input "defaultTransition", "decimal", title: "Default Transition Time", required: true, defaultValue: 0.0
+        input "defaultTransition", "decimal", title: "Level Transition Time (s)", required: true, defaultValue: 0.0
+        input "defaultStateTransition", "decimal", title: "On/Off Transition Time (s)", required: true, defaultValue: 0.0
 	    input "logging", "enum", title: "Log Level", required: false, defaultValue: "INFO", options: ["TRACE", "DEBUG", "INFO", "WARN", "ERROR"]
     }
 
@@ -174,6 +176,7 @@ def initialize() {
 	log("Initializing bulb...", "DEBUG")
     
     setDefaultTransitionDuration(defaultTransition)
+    setDefaultStateTransitionDuration(defaultStateTransition)
     setBulbName(bulb)
 	setupSchedule()
 }
@@ -241,15 +244,15 @@ def refresh() {
 	sendLIFXInquiry()
 }
 
-def on() {
+def on(duration=getDefaultStateTransitionDuration()) {
     log("Turning bulb on.", "INFO")
-    sendLIFXCommand(["power" : "on", "duration" : "0.0"])
+    sendLIFXCommand(["power" : "on", "duration" : duration])
     sendEvent(name: "switch", value: "on")
 }
 
-def off() {
+def off(duration=getDefaultStateTransitionDuration()) {
     log("Turning bulb off.", "INFO")
-    sendLIFXCommand(["power" : "off", "duration" : "0.0"])
+    sendLIFXCommand(["power" : "off", "duration" : duration])
     sendEvent(name: "switch", value: "off")
 }
 
@@ -366,6 +369,17 @@ def setDefaultTransitionDuration(value) {
 
 def getDefaultTransitionDuration() {
 	return state.transitionDuration
+}
+
+def setDefaultStateTransitionDuration(value) {
+	state.onOffTransitionDuration = value
+}
+
+def getDefaultStateTransitionDuration() {
+	if(state.onOffTransitionDuration == null) {
+    	state.onOffTransitionDuration = 0.0
+    }
+	return state.onOffTransitionDuration
 }
 
 def getLastCommand() {
