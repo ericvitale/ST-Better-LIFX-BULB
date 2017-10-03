@@ -3,6 +3,7 @@
  *
  * Copyright 2016 Eric Vitale
  *
+ * Version 1.0.2 - Added the switch capability in order to use this device with Alexa (10/3/2017)
  * Version 1.0.1 - Converted to Async API (06/21/2017)
  * Version 1.0.0 - Initial Release (05/31/2017)
  *
@@ -25,6 +26,7 @@ metadata {
 		capability "Button"
 		capability "Momentary"
 		capability "Sensor"
+        capability "Switch"
         
         command "activateScene"
 	}
@@ -107,6 +109,14 @@ def parse(String description) {
 def push() {
 	activateScene(scene, defaultTransition)
 	sendEvent(name: "button", value: "pushed", isStateChange: true)
+}
+
+def on() {
+	push()
+}
+
+def off() {
+	log("Method off() not implemented, this is ok.", "INFO")
 }
 
 def activateScene(uuid, duration=defaultTransition) {
