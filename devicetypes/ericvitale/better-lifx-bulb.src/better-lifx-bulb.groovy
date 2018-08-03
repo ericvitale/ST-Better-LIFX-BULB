@@ -3,6 +3,7 @@
  *
  *  Copyright 2016 Eric Vitale
  *
+ *  Version 1.1.4 - Updated the "on" indicator color of the DH to the standard ST Blue (#00a0dc). (08/03/2018)
  *  Version 1.1.3 - Cleaned up a bit. (06/30/2017)
  *  Version 1.1.2 - Added the ability to use separate durations for on/off and setLevel commands. (06/26/2017)
  *  Version 1.1.1 - Added setLevelAndTemperature method to allow webCoRE set both with a single command. (06/25/2017)
@@ -66,7 +67,7 @@ metadata {
 	tiles(scale: 2) {
     	multiAttributeTile(name:"switch", type: "lighting", width: 6, height: 4, canChangeIcon: true){
 			tileAttribute ("device.switch", key: "PRIMARY_CONTROL") {
-				attributeState "on", label:'${name}', action:"switch.off", icon:"http://hosted.lifx.co/smartthings/v1/196xOn.png", backgroundColor:"#79b821"//, nextState:"turningOff"
+				attributeState "on", label:'${name}', action:"switch.off", icon:"http://hosted.lifx.co/smartthings/v1/196xOn.png", backgroundColor:"#00a0dc"//, nextState:"turningOff"
 				attributeState "off", label:'${name}', action:"switch.on", icon:"http://hosted.lifx.co/smartthings/v1/196xOff.png", backgroundColor:"#ffffff"//, nextState:"turningOn"
 			}
             
@@ -81,7 +82,7 @@ metadata {
         
         multiAttributeTile(name:"switchDetails", type: "lighting", width: 6, height: 4, canChangeIcon: true){
 			tileAttribute ("device.switch", key: "PRIMARY_CONTROL") {
-				attributeState "on", label:'${name}', action:"switch.off", icon:"http://hosted.lifx.co/smartthings/v1/196xOn.png", backgroundColor:"#79b821"
+				attributeState "on", label:'${name}', action:"switch.off", icon:"http://hosted.lifx.co/smartthings/v1/196xOn.png", backgroundColor:"##00a0dc"
 				attributeState "off", label:'${name}', action:"switch.on", icon:"http://hosted.lifx.co/smartthings/v1/196xOff.png", backgroundColor:"#ffffff"
 			}
             
