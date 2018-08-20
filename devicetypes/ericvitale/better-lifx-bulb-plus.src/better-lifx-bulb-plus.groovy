@@ -3,6 +3,7 @@
  *
  *  Copyright 2016 Eric Vitale
  *
+ *  Version 1.1.5 - Updated to support the new SmartThings mobile app. (08/20/2018)
  *  Version 1.1.4 - Updated the "on" indicator color of the DH to the standard ST Blue (#00a0dc). (08/03/2018)
  *  Version 1.1.3 - Cleaned up a bit. (06/30/2017) 
  *  Version 1.1.2 - Added the ability to use separate durations for on/off and setLevel commands. (06/26/2017)
