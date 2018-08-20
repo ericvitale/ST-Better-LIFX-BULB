@@ -3,6 +3,7 @@
  *
  * Copyright 2016 Eric Vitale
  *
+ * Version 1.0.3 - Fix to support the new SmartThings app. (08/20/2018)
  * Version 1.0.2 - Added the switch capability in order to use this device with Alexa (10/3/2017)
  * Version 1.0.1 - Converted to Async API (06/21/2017)
  * Version 1.0.0 - Initial Release (05/31/2017)
@@ -21,7 +22,7 @@
 include 'asynchttp_v1'
 
 metadata {
-	definition (name: "LIFX Scene", namespace: "ericvitale", author: "ericvitale@gmail.com") {
+	definition (name: "LIFX Scene", namespace: "ericvitale", author: "ericvitale@gmail.com", vid: "generic-button") {
 		capability "Actuator"
 		capability "Button"
 		capability "Momentary"
