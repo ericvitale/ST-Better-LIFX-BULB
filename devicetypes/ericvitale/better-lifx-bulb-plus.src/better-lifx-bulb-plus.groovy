@@ -36,7 +36,7 @@ include 'asynchttp_v1'
 import java.text.DecimalFormat;
  
 metadata {
-	definition (name: "Better LIFX Bulb Plus", namespace: "ericvitale", author: "ericvitale@gmail.com") {
+	definition (name: "Better LIFX Bulb Plus", namespace: "ericvitale", author: "ericvitale@gmail.com", vid: "generic-rgbw-color-bulb) {
 		capability "Actuator"
 		capability "Color Control"
 		capability "Color Temperature"
